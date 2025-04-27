@@ -17,20 +17,23 @@ async def download_image(session, url, picture_path):
     except Exception as e:
         print(f"[Download] Error downloading {url}: {e}")
 
-async def download_images_from_collection(page, session, collection_url):
+async def download_images_from_collection(page, session, collection_url, post_title, folder_prefix):
+
     try:
         print(f"[Collection] Processing {collection_url}")
-        title_match = re.search(r'volumeNo=(\d+)', collection_url)
-        if not title_match:
-            print(f"[Collection] Could not extract volumeNo from URL: {collection_url}")
-            return
 
-        title = title_match.group(1)
-        desired_path = Path.cwd() / title
+        safe_title = re.sub(r'[<>:"/\\|?*]', '_', post_title).strip()
+
+        if indexed == "n":
+            folder_name = f"{safe_title}"
+        if indexed == "y":
+            folder_name = f"{folder_prefix} - {safe_title}"
+
+        desired_path = Path.cwd() / folder_name
         desired_path.mkdir(exist_ok=True)
 
         await page.goto(collection_url)
-        await page.wait_for_timeout(3000)  # Wait for JavaScript to load
+        await page.wait_for_timeout(3000)
 
         img_elements = await page.query_selector_all('img')
 
@@ -43,10 +46,10 @@ async def download_images_from_collection(page, session, collection_url):
         for img in img_elements:
             src = await img.get_attribute('src')
             if not src or 'post-phinf' not in src:
-                continue  # Only download actual post images
+                continue
 
             picture_id = unquote(urlparse(src).path.split('/')[-1])
-            picture_name = re.sub('[<>:\"/|?*]', ' ', picture_id).strip()
+            picture_name = re.sub('[<>:"/\\|?*]', ' ', picture_id).strip()
             picture_path = desired_path / picture_name
 
             if picture_path.exists():
@@ -54,17 +57,23 @@ async def download_images_from_collection(page, session, collection_url):
                 continue
 
             await download_image(session, src, picture_path)
-            await asyncio.sleep(0.5)  # Tiny pause between downloads
+            await asyncio.sleep(0.5)
 
     except Exception as e:
         print(f"[Collection] Unexpected error in {collection_url}: {e}")
 
-async def main_downloader(input_filename="collection_urls.txt"):
+async def main_downloader(indexed, urls_filename="collection_urls.txt", titles_filename="post_titles.txt"):
     try:
-        with open(input_filename, 'r') as f:
+        with open(urls_filename, 'r', encoding='utf-8') as f:
             collection_urls = [line.strip() for line in f if line.strip()]
-    except FileNotFoundError:
-        print(f"Error: The file {input_filename} was not found.")
+        with open(titles_filename, 'r', encoding='utf-8') as f:
+            post_titles = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        return
+
+    if len(collection_urls) != len(post_titles):
+        print(f"Error: Number of URLs ({len(collection_urls)}) doesn't match number of titles ({len(post_titles)}).")
         return
 
     async with async_playwright() as p:
@@ -72,11 +81,23 @@ async def main_downloader(input_filename="collection_urls.txt"):
         page = await browser.new_page()
 
         async with aiohttp.ClientSession() as session:
-            for collection_url in collection_urls:
-                await download_images_from_collection(page, session, collection_url)
+            if indexed == "n":
+                for collection_url, post_title in zip(collection_urls, post_titles):
+                    await download_images_from_collection(page, session, collection_url, post_title)
+
+            if indexed == "y":
+                for index, (collection_url, post_title) in enumerate(zip(collection_urls, post_titles), start=1):
+                    folder_prefix = f"{index:03}" 
+                    await download_images_from_collection(page, session, collection_url, post_title, folder_prefix)
+
 
         await browser.close()
 
+
 if __name__ == '__main__':
     assert version_info >= (3, 7), 'Script requires Python 3.7+.'
-    asyncio.run(main_downloader())
+    indexed = input("Do you want folder names to be indexed (e.g., beginning with 001, 002, etc)? Y or N: ").lower()
+    if indexed == "y" or indexed == "n":
+        asyncio.run(main_downloader(indexed))
+    else:
+        print(f"Invalid value {indexed}. Exiting.")
