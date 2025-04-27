@@ -37,7 +37,8 @@ async def scrape_all_post_urls(main_url, output_filename="collection_urls.txt"):
 
 if __name__ == '__main__':
     homepage_url = input("Enter the Naver Post homepage URL (e.g., https://m.post.naver.com/my.naver?memberNo=37024524): ").strip()
-    if homepage_url:
+    title_match = re.search(r'https://m\.post\.naver\.com/my\.naver\?memberNo=(\d+).*', homepage_url)
+    if title_match:
         asyncio.run(scrape_all_post_urls(homepage_url))
     else:
-        print("No URL entered. Exiting.")
+        print("Invalid URL entered. Exiting.")
