@@ -1,8 +1,10 @@
 import asyncio
+import re
 from playwright.async_api import async_playwright, TimeoutError
 
-async def scrape_all_post_urls(main_url, output_filename="collection_urls.txt"):
+async def scrape_all_post_urls(main_url, collection_filename="collection_urls.txt", title_filename="post_titles.txt"):
     post_urls = set()
+    post_titles = set()
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -28,12 +30,26 @@ async def scrape_all_post_urls(main_url, output_filename="collection_urls.txt"):
                 post_urls.add(full_url)
                 print(full_url)
 
+        # Grab all of the post titles
+        titles = await page.query_selector_all('strong.tit_feed')
+        for title in titles:
+            strong = await title.text_content()
+            if strong:
+                cleaned_title = re.sub(r'[<>:"/\\|?*]', '_', strong).strip()
+                post_titles.add(cleaned_title)
+                print(f'Extracted and cleaned title: {cleaned_title}')
+
         await browser.close()
 
-    with open(output_filename, 'w') as f:
+    with open(collection_filename, 'w') as f:
         for url in sorted(post_urls):
             f.write(url + '\n')
-    print(f"\n✅ Found {len(post_urls)} post URLs and saved them to {output_filename}")
+    print(f"\n✅ Found {len(post_urls)} post URLs and saved them to {collection_filename}")
+
+    with open(title_filename, 'w', encoding='utf-8') as g:
+        for title in sorted(post_titles):
+            g.write(title + '\n')
+    print(f"\n✅ Found {len(post_titles)} post titles and saved them to {title_filename}")
 
 if __name__ == '__main__':
     homepage_url = input("Enter the Naver Post homepage URL (e.g., https://m.post.naver.com/my.naver?memberNo=37024524): ").strip()
