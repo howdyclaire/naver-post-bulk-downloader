@@ -17,7 +17,7 @@ async def download_image(session, url, picture_path):
     except Exception as e:
         print(f"[Download] Error downloading {url}: {e}")
 
-async def download_images_from_collection(page, session, collection_url, post_title, folder_prefix):
+async def download_images_from_collection(page, session, collection_url, post_title, folder_prefix, indexed):
 
     try:
         print(f"[Collection] Processing {collection_url}")
@@ -83,12 +83,12 @@ async def main_downloader(indexed, urls_filename="collection_urls.txt", titles_f
         async with aiohttp.ClientSession() as session:
             if indexed == "n":
                 for collection_url, post_title in zip(collection_urls, post_titles):
-                    await download_images_from_collection(page, session, collection_url, post_title)
+                    await download_images_from_collection(page, session, collection_url, post_title, indexed)
 
             if indexed == "y":
                 for index, (collection_url, post_title) in enumerate(zip(collection_urls, post_titles), start=1):
                     folder_prefix = f"{index:03}" 
-                    await download_images_from_collection(page, session, collection_url, post_title, folder_prefix)
+                    await download_images_from_collection(page, session, collection_url, post_title, folder_prefix, indexed)
 
 
         await browser.close()
